@@ -1,0 +1,13 @@
+{
+  "name": "pokemon-overlay-ctrl",
+  "version": "1.0.0",
+  "description": "Panel de control para el overlay de Pokémon en StreamElements",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
