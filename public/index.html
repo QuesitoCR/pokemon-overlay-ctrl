@@ -171,7 +171,7 @@ input[type=text]:focus { border-color:var(--accent); }
 <header>
   <div style="display:flex;flex-direction:column;gap:2px;">
     <div class="logo">POKEMON<span>CTRL</span></div>
-    <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;">by <a href="https://xmax.carrd.co" target="_blank" style="color:var(--accent2);text-decoration:none;">xMax</a></div>
+    <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;">by <a href="https://unstudiomax.carrd.co" target="_blank" style="color:var(--accent2);text-decoration:none;">xMax</a> &middot; <span style="color:var(--muted);">unstudiomax</span></div>
   </div>
   <div class="tag">LIVE</div>
   <div class="hdr-right">
@@ -218,7 +218,7 @@ input[type=text]:focus { border-color:var(--accent); }
     </div>
     <div class="sidebar-section" style="margin-top:auto;padding-top:16px;border-top:1px solid var(--border);">
       <p style="font-size:11px;color:var(--muted);line-height:1.6;">
-        Hecho por <a href="https://xmax.carrd.co" target="_blank" style="color:var(--accent2);text-decoration:none;font-weight:600;">xMax</a> para el randomlocke de Jai.<br>
+        Hecho por <a href="https://unstudiomax.carrd.co" target="_blank" style="color:var(--accent2);text-decoration:none;font-weight:600;">xMax</a> para el randomlocke de Jai.<br>
         &copy; 2026 xMax — todos los derechos reservados.
       </p>
     </div>
@@ -341,12 +341,57 @@ function norm(s) {
   return (s||"").trim().toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9\-_.]/g,"");
 }
 
+// Genera todas las variantes posibles del nombre de un Pokémon
+// para cubrir distintas convenciones de archivos en el repo
+function nameVariants(species) {
+  const base = norm(species);
+  if (!base) return [];
+  const variants = new Set();
+  variants.add(base);                          // mr-mime
+  variants.add(base.replace(/-/g, ""));        // mrmime
+  variants.add(base.replace(/-/g, "_"));       // mr_mime
+  variants.add(base.replace(/-/g, "."));       // mr.mime
+  variants.add(base.replace(/-/g, " "));       // "mr mime" (poco probable pero por si acaso)
+  return [...variants];
+}
+
+// Cache: guarda la URL resuelta para no volver a probar cada vez
+const resolvedCache = {};
+
+// Versión rápida (sin verificar) — usa caché o primera variante
 function imgUrl(species) {
   if (!species) return "";
-  const s = norm(species);
-  // mr-mime se guarda como mr.mime en el repo
-  const repoName = s.replace("mr-mime", "mr.mime");
-  return `${BASE_IMG}/${encodeURIComponent(repoName)}${EXT}`;
+  if (resolvedCache[norm(species)]) return resolvedCache[norm(species)];
+  // mientras no está en caché usa la primera variante
+  const v = nameVariants(species);
+  return `${BASE_IMG}/${encodeURIComponent(v[0])}${EXT}`;
+}
+
+// Versión async — prueba todas las variantes y cachea la que carga
+function tryImg(url) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload  = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = url;
+  });
+}
+
+async function resolveImgUrl(species) {
+  const key = norm(species);
+  if (!key) return "";
+  if (resolvedCache[key]) return resolvedCache[key];
+  for (const v of nameVariants(species)) {
+    const url = `${BASE_IMG}/${encodeURIComponent(v)}${EXT}`;
+    if (await tryImg(url)) {
+      resolvedCache[key] = url;
+      return url;
+    }
+  }
+  // ninguna cargó — guardar la primera igual para no reintentar
+  const fallback = `${BASE_IMG}/${encodeURIComponent(nameVariants(species)[0])}${EXT}`;
+  resolvedCache[key] = fallback;
+  return fallback;
 }
 
 function filterPoke(q) {
@@ -436,7 +481,14 @@ function openAC(i, results) {
   results.forEach(p => {
     const el = document.createElement("div");
     el.className = "ac-item";
-    el.innerHTML = `<img src="${imgUrl(p.n)}" onerror="this.style.opacity=0"><span class="ac-name">${p.n}</span><span class="ac-num">#${String(p.id).padStart(3,"0")}</span>`;
+    const variants = nameVariants(p.n);
+    const thumbSrc = `${BASE_IMG}/${encodeURIComponent(variants[0])}${EXT}`;
+    // onerror prueba siguiente variante en cadena
+    const fallbacks = variants.slice(1).map(v => `${BASE_IMG}/${encodeURIComponent(v)}${EXT}`);
+    const onerrorScript = fallbacks.map((u,i) =>
+      `if(this.dataset.fi==${i}){this.dataset.fi=${i+1};this.src='${u}'}`
+    ).join(";else ");
+    el.innerHTML = `<img src="${thumbSrc}" data-fi="0" onerror="${onerrorScript};this.style.opacity=0"><span class="ac-name">${p.n}</span><span class="ac-num">#${String(p.id).padStart(3,"0")}</span>`;
     el.addEventListener("mousedown", ev => { ev.preventDefault(); pickAC(i, p.n); });
     list.appendChild(el);
   });
@@ -454,7 +506,7 @@ async function pickAC(i, name) {
   closeAC(i);
   saveSnapshot();
   state[i].species = name;
-  state[i].img = imgUrl(name);
+  state[i].img = await resolveImgUrl(name);
   renderPreviewSlot(i);
   const nick = document.getElementById(`nk-${i}`).value.trim();
   await postSlots({ index: i, name: nick || name, img: state[i].img });
@@ -498,7 +550,7 @@ function buildSlotRows() {
       if (species !== state[i].species) {
         saveSnapshot();
         state[i].species = species;
-        state[i].img = species ? imgUrl(species) : "";
+        state[i].img = species ? await resolveImgUrl(species) : "";
         renderPreviewSlot(i);
         const nick = document.getElementById(`nk-${i}`).value.trim();
         await postSlots({ index: i, name: nick || species, img: state[i].img });
@@ -604,7 +656,7 @@ async function applySlot(i) {
   const nick    = document.getElementById(`nk-${i}`).value.trim();
   state[i].species = species;
   state[i].nick    = nick;
-  state[i].img     = species ? imgUrl(species) : "";
+  state[i].img     = species ? await resolveImgUrl(species) : "";
   renderPreviewSlot(i);
   await postSlots({ index: i, name: nick || species, img: state[i].img });
   toast(`Slot ${i+1} actualizado`);
