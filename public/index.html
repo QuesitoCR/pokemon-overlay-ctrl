@@ -132,6 +132,19 @@ input[type=text]:focus { border-color:var(--accent); }
 }
 .btn-ghost:hover { background:var(--surface2); color:var(--text); }
 
+/* gender selector */
+.gender-wrap { display:none; align-items:center; gap:6px; margin-top:6px; }
+.gender-wrap.visible { display:flex; }
+.gender-wrap label { font-size:10px; color:var(--muted); }
+.gender-btn {
+  font-size:12px; padding:4px 10px; border-radius:6px; cursor:pointer;
+  border:1px solid var(--border2); background:var(--surface);
+  color:var(--muted); font-family:'DM Sans',sans-serif; transition:all .15s;
+}
+.gender-btn.active-f { background:rgba(236,100,180,0.15); color:#ec64b4; border-color:rgba(236,100,180,0.4); }
+.gender-btn.active-m { background:rgba(80,160,240,0.15); color:#50a0f0; border-color:rgba(80,160,240,0.4); }
+.gender-btn:hover { opacity:.8; }
+
 /* sidebar */
 .sidebar-section { margin-bottom:26px; }
 .cmd-list { display:flex; flex-direction:column; gap:7px; }
@@ -235,7 +248,7 @@ const EXT = ".png";
 // El backend está en el mismo servidor que sirve esta página
 const API = "";  // vacío = mismo origen
 
-const state = Array.from({ length: SLOT_COUNT }, () => ({ species: "", nick: "", img: "" }));
+const state = Array.from({ length: SLOT_COUNT }, () => ({ species: "", nick: "", img: "", gender: null }));
 let activeRow = -1;
 let pollTimer = null;
 
@@ -341,60 +354,63 @@ function norm(s) {
   return (s||"").trim().toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9\-_.]/g,"");
 }
 
-// Genera todas las variantes posibles del nombre de un Pokémon
-// para cubrir distintas convenciones de archivos en el repo
-function nameVariants(species) {
-  const base = norm(species);
-  if (!base) return [];
-  const variants = new Set();
-  variants.add(base);                          // mr-mime
-  variants.add(base.replace(/-/g, ""));        // mrmime
-  variants.add(base.replace(/-/g, "_"));       // mr_mime
-  variants.add(base.replace(/-/g, "."));       // mr.mime
-  variants.add(base.replace(/-/g, " "));       // "mr mime" (poco probable pero por si acaso)
-  return [...variants];
-}
+// Pokémon que tienen variante de género — mostrarán selector ♂/♀ al seleccionarlos
+const GENDER_VARIANTS = {
+  "nidoran-f": { f: "nidoranhembra", m: "nidoranmacho" },
+  "nidoran-m": { f: "nidoranhembra", m: "nidoranmacho" },
+};
 
-// Cache: guarda la URL resuelta para no volver a probar cada vez
-const resolvedCache = {};
+// Mapa fijo: nombre canónico → nombre exacto del archivo en el repo (sin extensión)
+const REPO_MAP = {
+  "mr-mime":   "mrmime",
+  "nidoran-f": "nidoranhembra",  // default hembra
+  "nidoran-m": "nidoranmacho",   // default macho
+  "ho-oh":     "ho-oh",
+  "farfetchd": "farfetchd",
+};
 
-// Versión rápida (sin verificar) — usa caché o primera variante
-function imgUrl(species) {
-  if (!species) return "";
-  if (resolvedCache[norm(species)]) return resolvedCache[norm(species)];
-  // mientras no está en caché usa la primera variante
-  const v = nameVariants(species);
-  return `${BASE_IMG}/${encodeURIComponent(v[0])}${EXT}`;
-}
-
-// Versión async — prueba todas las variantes y cachea la que carga
-function tryImg(url) {
-  return new Promise(resolve => {
-    const img = new Image();
-    img.onload  = () => resolve(true);
-    img.onerror = () => resolve(false);
-    img.src = url;
-  });
-}
-
-async function resolveImgUrl(species) {
+function toRepoFile(species) {
   const key = norm(species);
-  if (!key) return "";
-  if (resolvedCache[key]) return resolvedCache[key];
-  for (const v of nameVariants(species)) {
-    const url = `${BASE_IMG}/${encodeURIComponent(v)}${EXT}`;
-    if (await tryImg(url)) {
-      resolvedCache[key] = url;
-      return url;
-    }
-  }
-  // ninguna cargó — guardar la primera igual para no reintentar
-  const fallback = `${BASE_IMG}/${encodeURIComponent(nameVariants(species)[0])}${EXT}`;
-  resolvedCache[key] = fallback;
-  return fallback;
+  return REPO_MAP[key] !== undefined ? REPO_MAP[key] : key;
 }
 
-function filterPoke(q) {
+function imgUrl(species, genderOverride) {
+  if (!species) return "";
+  const key = norm(species);
+  if (genderOverride && GENDER_VARIANTS[key]) {
+    const file = genderOverride === "f" ? GENDER_VARIANTS[key].f : GENDER_VARIANTS[key].m;
+    return `${BASE_IMG}/${encodeURIComponent(file)}${EXT}`;
+  }
+  return `${BASE_IMG}/${encodeURIComponent(toRepoFile(species))}${EXT}`;
+}
+
+function hasGender(species) {
+  return !!GENDER_VARIANTS[norm(species)];
+}
+
+function updateGenderSelector(i) {
+  const gw = document.getElementById(`gw-${i}`);
+  const gf = document.getElementById(`gf-${i}`);
+  const gm = document.getElementById(`gm-${i}`);
+  if (!gw) return;
+  const show = hasGender(state[i].species);
+  gw.classList.toggle("visible", show);
+  if (!show) return;
+  const g = state[i].gender || "f";
+  gf.className = "gender-btn" + (g === "f" ? " active-f" : "");
+  gm.className = "gender-btn" + (g === "m" ? " active-m" : "");
+}
+
+async function setGender(i, g) {
+  state[i].gender = g;
+  state[i].img = imgUrl(state[i].species, g);
+  renderPreviewSlot(i);
+  updateGenderSelector(i);
+  const nick = document.getElementById(`nk-${i}`).value.trim();
+  await postSlots({ index: i, name: nick || state[i].species, img: state[i].img });
+}
+
+
   const n = norm(q);
   if (!n) return [];
   return POKEMON.filter(p => p.n.startsWith(n) || p.n.includes(n)).slice(0, 8);
@@ -483,11 +499,8 @@ function openAC(i, results) {
     el.className = "ac-item";
     const img = document.createElement("img");
     img.width = 26; img.height = 26;
-    // prueba variantes en cadena hasta que una cargue
-    const variants = nameVariants(p.n).map(v => `${BASE_IMG}/${encodeURIComponent(v)}${EXT}`);
-    let vi = 0;
-    img.src = variants[vi];
-    img.onerror = () => { vi++; if (vi < variants.length) img.src = variants[vi]; else img.style.opacity = "0"; };
+    img.src = imgUrl(p.n);
+    img.onerror = () => { img.style.opacity = "0"; };
     const nameSpan = document.createElement("span"); nameSpan.className = "ac-name"; nameSpan.textContent = p.n;
     const numSpan  = document.createElement("span"); numSpan.className  = "ac-num";  numSpan.textContent  = "#" + String(p.id).padStart(3,"0");
     el.append(img, nameSpan, numSpan);
@@ -508,8 +521,10 @@ async function pickAC(i, name) {
   closeAC(i);
   saveSnapshot();
   state[i].species = name;
-  state[i].img = await resolveImgUrl(name);
+  state[i].gender  = hasGender(name) ? (norm(name) === "nidoran-f" ? "f" : "m") : null;
+  state[i].img = imgUrl(name, state[i].gender);
   renderPreviewSlot(i);
+  updateGenderSelector(i);
   const nick = document.getElementById(`nk-${i}`).value.trim();
   await postSlots({ index: i, name: nick || name, img: state[i].img });
 }
@@ -524,10 +539,15 @@ function buildSlotRows() {
     row.id = `row-${i}`;
     row.innerHTML = `
       <div class="slot-badge">S${i+1}</div>
-      <div class="input-wrap">
+      <div class="input-wrap" style="grid-column:span 1;">
         <label>Pokémon</label>
         <input type="text" id="sp-${i}" placeholder="Ej: pikachu" autocomplete="off">
         <div class="ac-list" id="ac-${i}"></div>
+        <div class="gender-wrap" id="gw-${i}">
+          <label>Género:</label>
+          <button class="gender-btn" id="gf-${i}" onclick="setGender(${i},'f')">♀ Hembra</button>
+          <button class="gender-btn" id="gm-${i}" onclick="setGender(${i},'m')">♂ Macho</button>
+        </div>
       </div>
       <div class="input-wrap">
         <label>Apodo (opcional)</label>
@@ -552,8 +572,10 @@ function buildSlotRows() {
       if (species !== state[i].species) {
         saveSnapshot();
         state[i].species = species;
-        state[i].img = species ? await resolveImgUrl(species) : "";
+        state[i].gender  = hasGender(species) ? (norm(species) === "nidoran-f" ? "f" : "m") : null;
+        state[i].img = species ? imgUrl(species, state[i].gender) : "";
         renderPreviewSlot(i);
+        updateGenderSelector(i);
         const nick = document.getElementById(`nk-${i}`).value.trim();
         await postSlots({ index: i, name: nick || species, img: state[i].img });
       }
@@ -658,7 +680,9 @@ async function applySlot(i) {
   const nick    = document.getElementById(`nk-${i}`).value.trim();
   state[i].species = species;
   state[i].nick    = nick;
-  state[i].img     = species ? await resolveImgUrl(species) : "";
+  if (!state[i].gender && hasGender(species))
+    state[i].gender = norm(species) === "nidoran-f" ? "f" : "m";
+  state[i].img = species ? imgUrl(species, state[i].gender) : "";
   renderPreviewSlot(i);
   await postSlots({ index: i, name: nick || species, img: state[i].img });
   toast(`Slot ${i+1} actualizado`);
