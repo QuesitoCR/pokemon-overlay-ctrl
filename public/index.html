@@ -221,7 +221,7 @@ input[type=text]:focus { border-color:var(--accent); }
       <div style="font-size:12px;color:var(--muted);line-height:1.7;display:flex;flex-direction:column;gap:7px;">
         <p>1. Escribí el nombre del Pokémon — el autocomplete sugiere mientras escribís.</p>
         <p>2. Opcionalmente añadí un apodo que se muestra bajo la imagen.</p>
-        <p>3. Usá <strong style="color:var(--text)">Aplicar</strong> en cada slot para confirmar el cambio, o simplemente salí del campo y se guarda solo.</p>
+        <p>3. Usá <strong style="color:var(--text)">Aplicar</strong> en cada slot para confirmar el cambio en el overlay.</p>
         <p>4. Para dejar un slot vacío usá el botón <strong style="color:var(--text)">Vaciar</strong>.</p>
         <p>5. Usá <strong style="color:var(--text)">↩ Deshacer</strong> para revertir la última acción.</p>
         <p style="color:var(--accent2);">Los cambios se reflejan en el overlay en tiempo real.</p>
@@ -646,11 +646,9 @@ async function syncFromServer() {
   const data = await fetchSlots();
   if (!data) return;
   data.forEach((s, i) => {
-    // Populate inputs only if they're empty (don't overwrite what user is typing)
     const spInput = document.getElementById(`sp-${i}`);
     const nkInput = document.getElementById(`nk-${i}`);
     if (spInput && !spInput.matches(":focus") && !nkInput.matches(":focus")) {
-      // Derive species from img URL (last segment without extension)
       const imgPart = (s.img || "").split("/").pop().replace(/\.[^.]+$/, "");
       const species = decodeURIComponent(imgPart);
       if (spInput.value !== species) spInput.value = species;
@@ -701,13 +699,15 @@ async function clearSlot(i) {
   document.getElementById(`sp-${i}`).value = "";
   document.getElementById(`nk-${i}`).value = "";
   state[i] = { species: "", nick: "", img: "", gender: null };
-  // limpiar img del preview explícitamente antes de renderizar
   const imgEl = document.getElementById(`pi-${i}`);
   if (imgEl) { imgEl.onload = null; imgEl.onerror = null; imgEl.src = ""; imgEl.style.display = "none"; }
   renderPreviewSlot(i);
   updateGenderSelector(i);
   await postSlots({ index: i, name: "", img: "" });
   toast(`Slot ${i+1} vaciado`);
+  document.querySelectorAll(".slot-row").forEach(r => r.classList.remove("hl"));
+  document.querySelectorAll(".card").forEach(c => c.classList.remove("hl"));
+  activeRow = -1;
 }
 
 async function resetAll() {
