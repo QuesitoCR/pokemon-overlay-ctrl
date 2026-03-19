@@ -75,10 +75,11 @@ header {
 .slot-row {
   background: var(--surface2); border: 1px solid var(--border);
   border-radius: 10px; padding: 12px 14px;
-  display: grid; grid-template-columns: 32px 1fr 1fr auto;
-  gap: 10px; align-items: center; transition: border-color .2s;
+  display: flex; flex-direction: column; gap: 10px;
+  transition: border-color .2s;
 }
 .slot-row.hl { border-color: var(--accent); background: rgba(232,54,74,0.05); }
+.slot-row-top { display: grid; grid-template-columns: 32px 1fr 1fr auto; gap: 10px; align-items: start; }
 .slot-badge {
   font-family:'Space Mono',monospace; font-size:11px; font-weight:700;
   color:var(--accent); background:rgba(232,54,74,0.1); border-radius:6px;
@@ -182,10 +183,7 @@ input[type=text]:focus { border-color:var(--accent); }
 <body>
 
 <header>
-  <div style="display:flex;flex-direction:column;gap:2px;">
-    <div class="logo">POKEMON<span>CTRL</span></div>
-    <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;">by <a href="https://unstudiomax.carrd.co" target="_blank" style="color:var(--accent2);text-decoration:none;">xMax</a> &middot; <span style="color:var(--muted);">unstudiomax</span></div>
-  </div>
+  <div class="logo">POKEMON<span>CTRL</span> <span style="font-size:10px;font-weight:400;color:var(--muted);">by xMax</span></div>
   <div class="tag">LIVE</div>
   <div class="hdr-right">
     <div class="dot" id="dot"></div>
@@ -230,9 +228,11 @@ input[type=text]:focus { border-color:var(--accent); }
       </div>
     </div>
     <div class="sidebar-section" style="margin-top:auto;padding-top:16px;border-top:1px solid var(--border);">
-      <p style="font-size:11px;color:var(--muted);line-height:1.6;">
-        Hecho por <a href="https://unstudiomax.carrd.co" target="_blank" style="color:var(--accent2);text-decoration:none;font-weight:600;">xMax</a> para el randomlocke de Jai.<br>
-        &copy; 2026 xMax — todos los derechos reservados.
+      <p style="font-size:11px;color:var(--muted);line-height:1.9;">
+        Hecho por <a href="https://unstudiomax.carrd.co" target="_blank" style="color:var(--accent2);text-decoration:none;font-weight:600;">xMax</a> para el RandomLocke de JaiAviary.<br>
+        &copy; 2026 xMax &mdash; todos los derechos reservados.<br>
+        Contacto: <a href="https://unstudiomax.carrd.co" target="_blank" style="color:var(--muted);text-decoration:none;">unstudiomax.carrd.co</a><br>
+        <span style="font-family:'Space Mono',monospace;font-size:10px;">~unstudiomax~</span>
       </p>
     </div>
   </aside>
@@ -411,6 +411,7 @@ async function setGender(i, g) {
 }
 
 
+function filterPoke(q) {
   const n = norm(q);
   if (!n) return [];
   return POKEMON.filter(p => p.n.startsWith(n) || p.n.includes(n)).slice(0, 8);
@@ -538,24 +539,26 @@ function buildSlotRows() {
     row.className = "slot-row";
     row.id = `row-${i}`;
     row.innerHTML = `
-      <div class="slot-badge">S${i+1}</div>
-      <div class="input-wrap" style="grid-column:span 1;">
-        <label>Pokémon</label>
-        <input type="text" id="sp-${i}" placeholder="Ej: pikachu" autocomplete="off">
-        <div class="ac-list" id="ac-${i}"></div>
-        <div class="gender-wrap" id="gw-${i}">
-          <label>Género:</label>
-          <button class="gender-btn" id="gf-${i}" onclick="setGender(${i},'f')">♀ Hembra</button>
-          <button class="gender-btn" id="gm-${i}" onclick="setGender(${i},'m')">♂ Macho</button>
+      <div class="slot-row-top">
+        <div class="slot-badge">S${i+1}</div>
+        <div class="input-wrap">
+          <label>Pok&eacute;mon</label>
+          <input type="text" id="sp-${i}" placeholder="Ej: pikachu" autocomplete="off">
+          <div class="ac-list" id="ac-${i}"></div>
+        </div>
+        <div class="input-wrap">
+          <label>Apodo (opcional)</label>
+          <input type="text" id="nk-${i}" placeholder="Ej: Pika">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <button class="btn-sm" onclick="applySlot(${i})">Aplicar</button>
+          <button class="btn-sm danger" onclick="clearSlot(${i})">Vaciar</button>
         </div>
       </div>
-      <div class="input-wrap">
-        <label>Apodo (opcional)</label>
-        <input type="text" id="nk-${i}" placeholder="Ej: Pika">
-      </div>
-      <div>
-        <button class="btn-sm" onclick="applySlot(${i})">Aplicar</button>
-        <button class="btn-sm danger" onclick="clearSlot(${i})">Vaciar</button>
+      <div class="gender-wrap" id="gw-${i}">
+        <label>G&eacute;nero:</label>
+        <button class="gender-btn" id="gf-${i}" onclick="setGender(${i},'f')">&female; Hembra</button>
+        <button class="gender-btn" id="gm-${i}" onclick="setGender(${i},'m')">&male; Macho</button>
       </div>`;
     grid.appendChild(row);
 
