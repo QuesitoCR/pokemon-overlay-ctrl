@@ -183,12 +183,14 @@ input[type=text]:focus { border-color:var(--accent); }
     <div class="preview-stage">
       <div class="inv" id="inv"></div>
     </div>
-    <p class="section-label">Editar slots del party</p>
-    <div class="slots-grid" id="slots-grid"></div>
-    <div class="bulk-row">
-      <button class="btn-primary" onclick="applyAll()">Aplicar todo</button>
-      <button class="btn-ghost" onclick="resetAll()">Limpiar todo</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <p class="section-label" style="margin:0;">Editar slots del party</p>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-ghost" id="btn-undo" onclick="undo()" disabled style="font-size:12px;padding:7px 12px;opacity:0.4;">&#8629; Deshacer</button>
+        <button class="btn-ghost" onclick="resetAll()" style="font-size:12px;padding:7px 12px;color:var(--accent);border-color:rgba(232,54,74,0.3);">Limpiar todo</button>
+      </div>
     </div>
+    <div class="slots-grid" id="slots-grid"></div>
   </main>
 
   <aside class="sidebar">
@@ -383,6 +385,34 @@ function renderPreviewSlot(i) {
   img.onerror= () => { ph.textContent="No carga"; };
 }
 
+// ── Undo history ───────────────────────────────────────────────────────────
+const undoStack = [];  // cada entrada es snapshot del state completo
+
+function saveSnapshot() {
+  undoStack.push(state.map(s => ({ ...s })));
+  if (undoStack.length > 20) undoStack.shift();
+  document.getElementById("btn-undo").disabled = false;
+  document.getElementById("btn-undo").style.opacity = "1";
+}
+
+async function undo() {
+  if (!undoStack.length) return;
+  const prev = undoStack.pop();
+  for (let i = 0; i < SLOT_COUNT; i++) {
+    state[i] = prev[i];
+    document.getElementById(`sp-${i}`).value = prev[i].species || "";
+    document.getElementById(`nk-${i}`).value = prev[i].nick    || "";
+    renderPreviewSlot(i);
+  }
+  const payload = state.map(s => ({ name: s.nick || s.species, img: s.img }));
+  await postSlots(payload);
+  toast("Accion deshecha");
+  if (!undoStack.length) {
+    document.getElementById("btn-undo").disabled = true;
+    document.getElementById("btn-undo").style.opacity = "0.4";
+  }
+}
+
 // ── Autocomplete ───────────────────────────────────────────────────────────
 let acSelIdx = -1;
 
@@ -407,12 +437,15 @@ function closeAC(i) {
   acSelIdx = -1;
 }
 
-function pickAC(i, name) {
+async function pickAC(i, name) {
   document.getElementById(`sp-${i}`).value = name;
   closeAC(i);
+  saveSnapshot();
   state[i].species = name;
   state[i].img = imgUrl(name);
   renderPreviewSlot(i);
+  const nick = document.getElementById(`nk-${i}`).value.trim();
+  await postSlots({ index: i, name: nick || name, img: state[i].img });
 }
 
 // ── Slot rows ──────────────────────────────────────────────────────────────
@@ -435,7 +468,6 @@ function buildSlotRows() {
         <input type="text" id="nk-${i}" placeholder="Ej: Pika">
       </div>
       <div>
-        <button class="btn-sm" onclick="applySlot(${i})">Aplicar</button>
         <button class="btn-sm danger" onclick="clearSlot(${i})">Vaciar</button>
       </div>`;
     grid.appendChild(row);
@@ -447,7 +479,18 @@ function buildSlotRows() {
       activeRow = i; renderPreviewSlot(i);
       if (sp.value) openAC(i, filterPoke(sp.value));
     });
-    sp.addEventListener("blur", () => setTimeout(() => closeAC(i), 150));
+    sp.addEventListener("blur", async () => {
+      setTimeout(() => closeAC(i), 150);
+      const species = sp.value.trim();
+      if (species !== state[i].species) {
+        saveSnapshot();
+        state[i].species = species;
+        state[i].img = species ? imgUrl(species) : "";
+        renderPreviewSlot(i);
+        const nick = document.getElementById(`nk-${i}`).value.trim();
+        await postSlots({ index: i, name: nick || species, img: state[i].img });
+      }
+    });
     sp.addEventListener("input", e => openAC(i, filterPoke(e.target.value)));
     sp.addEventListener("keydown", e => {
       const list = document.getElementById(`ac-${i}`);
@@ -471,6 +514,15 @@ function buildSlotRows() {
 
     nk.addEventListener("focus", () => { activeRow = i; renderPreviewSlot(i); });
     nk.addEventListener("input", e => { state[i].nick = e.target.value; renderPreviewSlot(i); });
+    nk.addEventListener("blur", async () => {
+      const nick = nk.value.trim();
+      if (nick !== state[i].nick) {
+        saveSnapshot();
+        state[i].nick = nick;
+        renderPreviewSlot(i);
+        await postSlots({ index: i, name: nick || state[i].species, img: state[i].img });
+      }
+    });
 
     row.addEventListener("click", () => {
       activeRow = i;
@@ -560,6 +612,7 @@ async function applyAll() {
 }
 
 async function clearSlot(i) {
+  saveSnapshot();
   document.getElementById(`sp-${i}`).value = "";
   document.getElementById(`nk-${i}`).value = "";
   state[i] = { species: "", nick: "", img: "" };
@@ -569,6 +622,7 @@ async function clearSlot(i) {
 }
 
 async function resetAll() {
+  saveSnapshot();
   for (let i = 0; i < SLOT_COUNT; i++) {
     document.getElementById(`sp-${i}`).value = "";
     document.getElementById(`nk-${i}`).value = "";
