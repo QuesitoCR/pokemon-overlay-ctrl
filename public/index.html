@@ -481,14 +481,16 @@ function openAC(i, results) {
   results.forEach(p => {
     const el = document.createElement("div");
     el.className = "ac-item";
-    const variants = nameVariants(p.n);
-    const thumbSrc = `${BASE_IMG}/${encodeURIComponent(variants[0])}${EXT}`;
-    // onerror prueba siguiente variante en cadena
-    const fallbacks = variants.slice(1).map(v => `${BASE_IMG}/${encodeURIComponent(v)}${EXT}`);
-    const onerrorScript = fallbacks.map((u,i) =>
-      `if(this.dataset.fi==${i}){this.dataset.fi=${i+1};this.src='${u}'}`
-    ).join(";else ");
-    el.innerHTML = `<img src="${thumbSrc}" data-fi="0" onerror="${onerrorScript};this.style.opacity=0"><span class="ac-name">${p.n}</span><span class="ac-num">#${String(p.id).padStart(3,"0")}</span>`;
+    const img = document.createElement("img");
+    img.width = 26; img.height = 26;
+    // prueba variantes en cadena hasta que una cargue
+    const variants = nameVariants(p.n).map(v => `${BASE_IMG}/${encodeURIComponent(v)}${EXT}`);
+    let vi = 0;
+    img.src = variants[vi];
+    img.onerror = () => { vi++; if (vi < variants.length) img.src = variants[vi]; else img.style.opacity = "0"; };
+    const nameSpan = document.createElement("span"); nameSpan.className = "ac-name"; nameSpan.textContent = p.n;
+    const numSpan  = document.createElement("span"); numSpan.className  = "ac-num";  numSpan.textContent  = "#" + String(p.id).padStart(3,"0");
+    el.append(img, nameSpan, numSpan);
     el.addEventListener("mousedown", ev => { ev.preventDefault(); pickAC(i, p.n); });
     list.appendChild(el);
   });
