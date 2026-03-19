@@ -230,9 +230,9 @@ input[type=text]:focus { border-color:var(--accent); }
     <div class="sidebar-section" style="margin-top:auto;padding-top:16px;border-top:1px solid var(--border);">
       <p style="font-size:11px;color:var(--muted);line-height:1.9;">
         Hecho por <a href="https://unstudiomax.carrd.co" target="_blank" style="color:var(--accent2);text-decoration:none;font-weight:600;">xMax</a> para el RandomLocke de JaiAviary.<br>
-        &copy; 2026 xMax &mdash; todos los derechos reservados.<br>
         Contacto: <a href="https://unstudiomax.carrd.co" target="_blank" style="color:var(--muted);text-decoration:none;">unstudiomax.carrd.co</a><br>
-        <span style="font-family:'Space Mono',monospace;font-size:10px;">~unstudiomax~</span>
+        <span style="font-family:'Space Mono',monospace;font-size:10px;">~unstudiomax~</span><br>
+        &copy; 2026 xMax &mdash; todos los derechos reservados.
       </p>
     </div>
   </aside>
@@ -709,8 +709,12 @@ async function clearSlot(i) {
   saveSnapshot();
   document.getElementById(`sp-${i}`).value = "";
   document.getElementById(`nk-${i}`).value = "";
-  state[i] = { species: "", nick: "", img: "" };
+  state[i] = { species: "", nick: "", img: "", gender: null };
+  // limpiar img del preview explícitamente antes de renderizar
+  const imgEl = document.getElementById(`pi-${i}`);
+  if (imgEl) { imgEl.onload = null; imgEl.onerror = null; imgEl.src = ""; imgEl.style.display = "none"; }
   renderPreviewSlot(i);
+  updateGenderSelector(i);
   await postSlots({ index: i, name: "", img: "" });
   toast(`Slot ${i+1} vaciado`);
 }
