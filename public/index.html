@@ -520,14 +520,11 @@ function closeAC(i) {
 async function pickAC(i, name) {
   document.getElementById(`sp-${i}`).value = name;
   closeAC(i);
-  saveSnapshot();
   state[i].species = name;
   state[i].gender  = hasGender(name) ? (norm(name) === "nidoran-f" ? "f" : "m") : null;
   state[i].img = imgUrl(name, state[i].gender);
   renderPreviewSlot(i);
   updateGenderSelector(i);
-  const nick = document.getElementById(`nk-${i}`).value.trim();
-  await postSlots({ index: i, name: nick || name, img: state[i].img });
 }
 
 // ── Slot rows ──────────────────────────────────────────────────────────────
@@ -569,19 +566,8 @@ function buildSlotRows() {
       activeRow = i; renderPreviewSlot(i);
       if (sp.value) openAC(i, filterPoke(sp.value));
     });
-    sp.addEventListener("blur", async () => {
+    sp.addEventListener("blur", () => {
       setTimeout(() => closeAC(i), 150);
-      const species = sp.value.trim();
-      if (species !== state[i].species) {
-        saveSnapshot();
-        state[i].species = species;
-        state[i].gender  = hasGender(species) ? (norm(species) === "nidoran-f" ? "f" : "m") : null;
-        state[i].img = species ? imgUrl(species, state[i].gender) : "";
-        renderPreviewSlot(i);
-        updateGenderSelector(i);
-        const nick = document.getElementById(`nk-${i}`).value.trim();
-        await postSlots({ index: i, name: nick || species, img: state[i].img });
-      }
     });
     sp.addEventListener("input", e => openAC(i, filterPoke(e.target.value)));
     sp.addEventListener("keydown", e => {
@@ -600,21 +586,12 @@ function buildSlotRows() {
         e.preventDefault();
         if (acSelIdx >= 0 && items[acSelIdx]) {
           pickAC(i, items[acSelIdx].querySelector(".ac-name").textContent);
-        } else { closeAC(i); applySlot(i); }
+        } else { closeAC(i); }
       } else if (e.key === "Escape") closeAC(i);
     });
 
     nk.addEventListener("focus", () => { activeRow = i; renderPreviewSlot(i); });
     nk.addEventListener("input", e => { state[i].nick = e.target.value; renderPreviewSlot(i); });
-    nk.addEventListener("blur", async () => {
-      const nick = nk.value.trim();
-      if (nick !== state[i].nick) {
-        saveSnapshot();
-        state[i].nick = nick;
-        renderPreviewSlot(i);
-        await postSlots({ index: i, name: nick || state[i].species, img: state[i].img });
-      }
-    });
 
     row.addEventListener("click", () => {
       activeRow = i;
@@ -623,6 +600,15 @@ function buildSlotRows() {
       renderPreviewSlot(i);
     });
   }
+
+  // Clic fuera de cualquier slot → quitar borde rojo
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".slot-row")) {
+      document.querySelectorAll(".slot-row").forEach(r => r.classList.remove("hl"));
+      document.querySelectorAll(".card").forEach(c => c.classList.remove("hl"));
+      activeRow = -1;
+    }
+  });
 }
 
 // ── API calls ──────────────────────────────────────────────────────────────
@@ -681,6 +667,7 @@ async function syncFromServer() {
 async function applySlot(i) {
   const species = document.getElementById(`sp-${i}`).value.trim();
   const nick    = document.getElementById(`nk-${i}`).value.trim();
+  saveSnapshot();
   state[i].species = species;
   state[i].nick    = nick;
   if (!state[i].gender && hasGender(species))
@@ -689,6 +676,10 @@ async function applySlot(i) {
   renderPreviewSlot(i);
   await postSlots({ index: i, name: nick || species, img: state[i].img });
   toast(`Slot ${i+1} actualizado`);
+  // quitar borde rojo al aplicar
+  document.querySelectorAll(".slot-row").forEach(r => r.classList.remove("hl"));
+  document.querySelectorAll(".card").forEach(c => c.classList.remove("hl"));
+  activeRow = -1;
 }
 
 async function applyAll() {
